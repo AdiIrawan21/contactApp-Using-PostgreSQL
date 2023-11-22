@@ -1,0 +1,43 @@
+<div class="container">
+  <div class="contact-list" style="margin-top: 30px">
+    <h2 style="text-align: left">Daftar Kontak</h2>
+    <a href="/contact/add" class="card-link btn btn-success mb-3 fw-bold" style="text-decoration: none">Tambah Data</a>
+
+    <!-- menampilkan pesan message dari flash -->
+    <% if (msg.length !== 0) { %>
+    <div class="alert alert-success" role="alert"><%= msg %></div>
+    <% } %>
+
+    <!-- Kondisi jika data contact kosong, maka akan tampil pesan data tidak tersedia -->
+    <% if (contacts.length === 0) { %>
+    <div class="alert alert-warning" role="alert">Data tidak tersedia</div>
+    <% } %>
+
+    <!-- Table Data Contact -->
+    <table class="table table-striped table-hover table-bordered">
+      <thead>
+        <tr>
+          <th scope="row" data-id="id">No</th>
+          <th>Nama</th>
+          <th>Nomor Telepon</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!--Melakukan perulangan untuk menampilkan data contact jika tersedia-->
+        <% contacts.forEach((contact, index) => { index++ %>
+        <tr>
+          <th scope="row"><%= index++ %></th>
+          <td><%= contact.nama %></td>
+          <td><%= contact.mobile %></td>
+          <td>
+            <a href="/contact/<%= contact.nama %>" class="btn btn-success badge rounded-pill"><i class="bi bil-info-circle"></i>Detail</a>
+            <a href="/contact/update/<%= contact.nama %>" class="btn btn-info badge rounded-pill"><i class="bi bil-info-circle"></i>Edit</a>
+            <a href="/contact/delete/<%= contact.nama %>" button onclick="return confirm('Apakah yakin untuk menghapus kontak?')" class="btn btn-warning badge rounded-pill"><i class="bi bil-info-circle"></i>Delete</a>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
