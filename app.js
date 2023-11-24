@@ -4,7 +4,7 @@ const app = express(); // membuat aplikasi express
 const expressLayouts = require("express-ejs-layouts"); // import module express-ejs-layouts
 const host = "localhost";
 const port = 3000; // konfigurasi port
-const { ambilData, findData, tambahData, cekNama, hapusData, updateData } = require("./utility/function"); //import module function.js
+const { ambilData, tambahData, cekData, findData, hapusData, updateData } = require("./utility/function"); //import module function.js
 const { body, check, validationResult } = require("express-validator"); // import module express validator, untuk melakukan unique pada data nama
 const cookieParser = require("cookie-parser"); // import module cookie-parser
 const flash = require("connect-flash"); // import module connect-flash
@@ -48,6 +48,7 @@ app.get("/about", (req, res) => {
 });
 
 // route ke halaman contact, menampilkan list contact pada table db
+
 app.get("/contact", async (req, res) => {
   // Mencoba mengambil data contact dari database PostgreSQL
   try {
@@ -77,9 +78,8 @@ app.get("/contact", async (req, res) => {
   }
 });
 
+// ================================================ Route add contact =============================================== //
 
-
-// route ke halaman add data contact
 app.get("/contact/add", (req, res) => {
   res.render("add-contact", {
     title: "Page Add Contact",
@@ -89,114 +89,174 @@ app.get("/contact/add", (req, res) => {
 
 //data contact proccess
 app.post(
-  "/contact",
-  // melakukan pengecekan data nama, jika data nama sudah tersedia di daftar contact.json
+  '/contact',
   [
-    body("nama").custom((value) => {
-      const cek = cekNama(value); // deklarasi variabel cek untuk mengetahui apakah ada duplikat atau tidak
-      console.log(cek);
+    body('nama').custom(async (value) => {
+      const cek = await cekData(value);
 
-      // melakukan pengkondisian pada variabel cek
       if (cek) {
-        throw new Error("Data Nama sudah terdaftar."); // jika nama yang diinputkan pada form sudah terdaftar maka akan muncul pesan
+        throw new Error('Data Nama sudah terdaftar.');
       } else {
-        return true; // jika belum terdaftar, maka akan mengembalikan nilai true
+        return true;
       }
     }),
-    // validasi email dan mobile
-    check("mobile", "Phone Number is Wrong.").isMobilePhone(),
-    check("email", "Email format is wrong.").isEmail(),
+    check('email', 'Format Email salah.').isEmail(),
+    check('mobile', 'Format NoTelp salah harap masukkan sesuai format IDN.').isMobilePhone(),
   ],
-  (req, res) => {
-    const errors = validationResult(req); // akan mengambil hasil validasi dari middleware express-validator.
+  async (req, res) => {
+    const errors = validationResult(req);
+
     if (!errors.isEmpty()) {
-      res.render("add-contact", {
-        title: "Page Add Data",
-        layout: "layout/main",
-        errors: errors.array(), // akan merender tampilan "add-contact" lagi, dengan meneruskan array kesalahan validasi ke tampilan.
+      res.render('add-contact', {
+        title: 'Page Add Data',
+        layout: 'layout/main',
+        errors: errors.array(),
       });
     } else {
-      // jika tidak, akan memanggil fungsi tambahData() untuk menambahkan data kontak baru ke contacts.json
-      tambahData(req.body);
-      req.flash("msg", "Data Contact Baru Berhasil Ditambahkan!");
-      res.redirect("/contact");
+      try {
+        await tambahData(req.body.nama, req.body.mobile, req.body.email); // menggunakan fungsi tambahData dari function.js
+        req.flash('msg', 'Data Contact Baru Berhasil Ditambahkan!');
+        res.redirect('/contact');
+      } catch (err) {
+        console.error(err.message);
+        req.flash('msg', err.message);
+        res.redirect('/contact');
+      }
     }
   }
 );
 
-// route ke halaman detail dari contact
-app.get("/contact/:nama", async (req, res) => {
-  // Ambil nama contact dari URL query string
-  const nama = req.params.nama;
+// ================================================ END =============================================== //
 
-  // Cari data contact berdasarkan nama
-  const contacts = await ambilData();
 
-  // Temukan objek contact berdasarkan nama
-  const contact = contacts.find((contact) => contact.nama === nama);
 
-  // Render halaman detail contact dengan data yang diambil
-  res.render("detail", {
-    contact,
-    title: "Page Detail Contact",
-    layout: "layout/main",
-  });
+
+// ========================= Route detail contact ============================== //
+
+app.get('/contact/:nama', async (req, res) => {
+  try {
+    // Menemukan data berdasarkan nama untuk ditampilkan dalam halaman detail
+    const contact = await findData(req.params.nama);
+
+    // Menampilkan halaman detail-contact dengan data yang ditemukan
+    res.render('detail', {
+      title: 'Detail Contact',
+      layout: 'layout/main',
+      contact,
+    });
+  } catch (err) {
+    console.error(err.message);
+
+    // Menampilkan pesan flash jika terjadi kesalahan
+    req.flash('msg', 'Terjadi kesalahan saat mengambil data untuk detail.');
+
+    // Redirect ke halaman contact
+    res.redirect('/contact');
+  }
 });
 
 
+// =================================== END =================================== //
 
-// route untuk delete contact
-app.get("/contact/delete/:nama", (req, res) => {
-  findData(req.params.nama);
-  hapusData(req.params.nama);
-  req.flash("msg", "Data Contact Berhasil Dihapus!");
-  res.redirect("/contact");
+
+
+// ========================= Route delete contact ============================== //
+app.get('/contact/delete/:nama', async (req, res) => {
+  try {
+    // Menemukan data sebelum dihapus (opsional, tergantung kebutuhan)
+    await findData(req.params.nama);
+
+    // Menghapus data
+    await hapusData(req.params.nama);
+
+    // Menampilkan pesan flash
+    req.flash('msg', 'Data Contact Berhasil Dihapus!');
+
+    // Redirect ke halaman contact
+    res.redirect('/contact');
+  } catch (err) {
+    console.error(err.message);
+
+    // Menampilkan pesan flash jika terjadi kesalahan
+    req.flash('msg', 'Terjadi kesalahan saat menghapus data.');
+
+    // Redirect ke halaman contact
+    res.redirect('/contact');
+  }
 });
 
-// form ubah data contact
-app.get("/contact/update/:nama", (req, res) => {
-  const contact = findData(req.params.nama);
+// ================================= END ====================================== //
 
-  res.render("update-contact", {
-    title: "Page Edit Contact",
-    layout: "layout/main",
-    contact,
-  });
+
+
+// =========================================== Route update contact ============================================ //
+app.get("/contact/update/:nama", async (req, res) => {
+  try {
+    // Menemukan data berdasarkan nama untuk ditampilkan dalam form update
+    const contact = await findData(req.params.nama);
+
+    // Menampilkan halaman update-contact dengan data yang ditemukan
+    if (contact) {
+      res.render('update-contact', {
+        title: 'Update Contact',
+        layout: 'layout/main',
+        contact,
+        oldNama: req.params.nama,
+      });
+    } else {
+      // Jika data kontak tidak ditemukan, redirect ke halaman contact
+      req.flash('msg', 'Data kontak tidak ditemukan.');
+      res.redirect('/contact');
+    }
+  } catch (err) {
+    console.error(err.message);
+
+    // Menampilkan pesan flash jika terjadi kesalahan
+    req.flash('msg', 'Terjadi kesalahan saat mengambil data untuk update.');
+    
+    // Redirect ke halaman contact
+    res.redirect('/contact');
+  }
 });
 
 // proses update data
-app.post(
-  "/contact/update",
-  [
-    body("nama").custom((value, { req }) => {
-      const cek = cekNama(value); // deklarasi variabel cek untuk mengetahui apakah ada duplikat atau tidak
+app.post('/contact/update', [
+  body('nama').custom(async (value, { req }) => {
+    // Menggunakan await untuk memanggil cekNama
+    const cek = await cekData(value);
 
-      // melakukan pengkondisian pada variabel cek
-      if (value !== req.body.oldNama && cek) {
-        throw new Error("Data Nama sudah terdaftar."); // jika nama yang diinputkan pada form sudah terdaftar maka akan muncul pesan
-      }
-      return true; // jika belum terdaftar, maka akan mengembalikan nilai true
-    }),
-    // validasi email dan mobile
-    check("mobile", "Phone Number is Wrong.").isMobilePhone("id-ID"),
-    check("email", "Email format is wrong.").isEmail(),
-  ],
-  (req, res) => {
+    if (value !== req.body.oldNama && cek) {
+      throw new Error('Data Nama sudah terdaftar.');
+    }
+    return true;
+  }),
+  check('mobile', 'Phone Number is Wrong.').isMobilePhone('id-ID'),
+  check('email', 'Email format is wrong.').isEmail(),
+], async (req, res) => {
+  try {
     const errors = validationResult(req);
+
     if (!errors.isEmpty()) {
-      res.render("update-contact", {
-        title: "Page Update Contact",
-        layout: "layout/main",
+      res.render('update-contact', {
+        title: 'Update Contact',
+        layout: 'layout/main',
         errors: errors.array(),
         contact: req.body,
       });
     } else {
       updateData(req.body);
-      req.flash("msg", "Data Contact Berhasil di Update.");
-      res.redirect("/contact");
+      req.flash('msg', 'Data Contact Berhasil di Update.');
+      res.redirect('/contact');
     }
+  } catch (err) {
+    console.error(err.message);
+
+    req.flash('msg', 'Terjadi kesalahan saat update data.');
+    res.redirect('/contact');
   }
-);
+});
+
+// ================================================ END ======================================================= //
 
 // route error handling jika tidak sesuai, maka akan menampilkan page not found
 app.use("/", (req, res) => {
